@@ -1,0 +1,100 @@
+#!/bin/bash
+function show_help {
+    echo "Usage: $0 [options]"
+    echo "Options:"
+    echo "  -u, --users         
+    echo "  -p, --processes     
+    echo "  -h, --help          
+    echo "  -l PATH, --log PATH 
+    echo "  -e PATH, --errors PATH 
+    exit 1
+}
+
+
+function list_users {
+    while IFS=: read -r username _ _ _ _ home _; 
+        echo "$username: $home"
+    done < /etc/passwd | sort
+}
+function list_processes {
+    ps aux --sort pid
+}
+function check_path {
+    local path=$1
+    if [ ! -d "$(dirname "$path")" ]; then
+        echo "Ошибка: Директория для пути $path недоступна или не существует." >&2
+        exit 1
+    fi
+}
+LOG_PATH=""
+ERROR_PATH=""
+while getopts ":uphl:e:-:" opt; do
+    case ${opt} in
+        u )
+            ACTION="users"
+            ;;
+        p )
+            ACTION="processes"
+            ;;
+        h )
+            show_help
+            ;;
+        l )
+            LOG_PATH=$OPTARG
+            ;;
+        e )
+            ERROR_PATH=$OPTARG
+            ;;
+        - )
+            case "${OPTARG}" in
+                users)
+                    ACTION="users"
+                    ;;
+                processes)
+                    ACTION="processes"
+                    ;;
+                help)
+                    show_help
+                    ;;
+                log)
+                    LOG_PATH="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
+                    ;;
+                errors)
+                    ERROR_PATH="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
+                    ;;
+                *)
+                    echo "Ошибка: Неизвестная опция --${OPTARG}" >&2
+                    show_help
+                    ;;
+            esac
+            ;;
+        \? )
+            echo "Ошибка: Неизвестная опция -${OPTARG}" >&2
+            show_help
+            ;;
+    esac
+done
+if [ -n "$LOG_PATH" ]; then
+    check_path "$LOG_PATH"
+fi
+if [ -n "$ERROR_PATH" ]; then
+    check_path "$ERROR_PATH"
+fi
+if [ -n "$LOG_PATH" ]; then
+    exec 1>>"$LOG_PATH"
+fi
+if [ -n "$ERROR_PATH" ]; then
+    exec 2>>"$ERROR_PATH"
+fi
+case $ACTION in
+    users)
+        list_users
+        ;;
+    processes)
+        list_processes
+        ;;
+    *)
+        show_help
+        ;;
+esac
+exec 1>&3 2>&4
